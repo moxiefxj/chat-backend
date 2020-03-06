@@ -24,7 +24,7 @@ app.use('/', indexRouter);
 app.use('/users', usersRouter);
 
 app.get('/api/userlist',async function(req,res){
-  let sqlStr = "select * from table1"
+  let sqlStr = "select * from table1 where isgroup is null"
 
   //等待获取mysql查询结果
   let result =await sqlQuery(sqlStr)

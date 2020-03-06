@@ -31,11 +31,20 @@ function getSocket(server){
             let result2 =await sqlQuery(sqlStr2)
             io.sockets.emit('users',Array.from(result2))
 
-            // 最新未接收的信息
-            let sqlStr3 = 'select * from chat where isread = ? and toname = ?' 
-            let result3 =await sqlQuery(sqlStr3,['false',data.username])
-
+            // 最新未接收的个人信息
+            let sqlStr3 = 'select * from chat where isread = ? and toid = ? '  
+            let result3 =await sqlQuery(sqlStr3,[false,data.username])
+            console.log(result3)
             socket.emit('unreadMsg',Array.from(result3))
+
+            // 加入群(房间)
+            // 获取所有的群
+            let sqlStr4 = 'select * from table1 where isgroup=?'
+            let result4 = await sqlQuery(sqlStr4,['true'])
+            Array.from(result4).forEach((item,index)=>{
+                socket.join(item.socketid)
+            })
+
        })
 
     //    监听断开事件
@@ -54,24 +63,30 @@ function getSocket(server){
        })
 
        socket.on('sendMsg',async function(msg){
-           console.log(msg)
             // 判断收消息的人是否在线
             let strSql = 'select * from table1 where username = ? and isonline = ?'
-            let result = await sqlQuery(strSql,[msg.toname.username,'true'])
+            let result = await sqlQuery(strSql,[msg.toid.username,'true'])
             if(result.length > 0){
                 // 如果此人在线，那么直接发送消息
                 let toid = result[0].socketid
-                socket.toname(toid).emit(msg)
-                // 将聊天内容存放到数据库
-                let strSql1 = 'insert into chat (sendname,toname,content,chattime,isread) values (?,?,?,?,?)'
-                let arr1 =[msg.sendname.username,msg.toname.username,msg.content,msg.chattime,'true']
+                
+                socket.to(toid).emit('accept',msg)
+                // // 将聊天内容存放到数据库
+                let strSql1 = 'insert into chat (sendid,toid,content,chattime,isread) values (?,?,?,?,?)'
+                let arr1 =[msg.sendid.id,msg.toid.id,msg.content,msg.chattime,'true']
                 sqlQuery(strSql1,arr1)
             }else{
-                let strSql1 = 'insert into chat (sendname,toname,content,chattime,isread) values (?,?,?,?,?)'
-                let arr1 =[msg.sendname.username,msg.toname.username,msg.content,msg.chattime,'false']
+                let strSql1 = 'insert into chat (sendid,toid,content,chattime,isread) values (?,?,?,?,?)'
+                let arr1 =[msg.sendid.id,msg.toid.id,msg.content,msg.chattime,'false']
                 sqlQuery(strSql1,arr1)
             }
-       })   
+       }) 
+       
+    //    如果收到已读消息，将isread改为true
+       socket.on('readMsg',(data)=>{
+           let sqlStr = 'update chat set isread =? where sendid = ? and toid = ?'
+           sqlQuery(sqlStr,['true',data.userid,data.selfid])
+       })
     });
 }
 socketio.getSocket = getSocket;
