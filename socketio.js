@@ -33,8 +33,7 @@ function getSocket(server){
 
             // 最新未接收的个人信息
             let sqlStr3 = 'select * from chat where isread = ? and toid = ? '  
-            let result3 =await sqlQuery(sqlStr3,[false,data.username])
-            console.log(result3)
+            let result3 =await sqlQuery(sqlStr3,['false',data.id])
             socket.emit('unreadMsg',Array.from(result3))
 
             // 加入群(房间)
