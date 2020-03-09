@@ -19,8 +19,8 @@ function getSocket(server){
             }
 
         //    修改数据库的登录信息(socketid,isonline)
-            let sqlStr = "update users set socketid=?,isonline=? where username =?" 
-            let result = await sqlQuery(sqlStr,[socket.id,'true',data.username])
+            let sqlStr = "update users set socketid=?,isonline=?,chattime=? where username =?" 
+            let result = await sqlQuery(sqlStr,[socket.id,'true',new Date().getTime(),data.username])
             socket.emit('login',{
                 data:data,
                 state:'ok',
@@ -33,16 +33,13 @@ function getSocket(server){
             // io.sockets.emit('users',Array.from(result2))
 
             // 最新未接收的个人信息
-            // 下一版将改进为时间戳刷新消息
-            let sqlStr3 = 'select * from chat where isread = ? and toid = ? '  
-            let result3 =await sqlQuery(sqlStr3,['false',data.id])
+            let sqlStr3 = 'select * from chat where chattime <= ? and chattime >=? and toid = ? '  
+            let result3 =await sqlQuery(sqlStr3,[new Date().getTime(),data.chattime,data.id])
             socket.emit('unreadMsg',Array.from(result3))
 
             // 加入群(房间)
             let sqlStr4 = 'SELECT * FROM groupchat g WHERE id IN(SELECT groupid FROM users u,user_group ug WHERE u.id = ug.userid AND u.id = ?)'
             let result4 = await sqlQuery(sqlStr4,data.id)
-            console.log(result4.id)
-            console.log(Array.from(result4))
             socket.emit('room',Array.from(result4))
             Array.from(result4).forEach((item,index)=>{
                 socket.join(item.groupchat)  //加入房间
@@ -67,28 +64,46 @@ function getSocket(server){
 
        socket.on('sendMsg',async function(msg){
             // 判断收消息的人是否在线
-            let strSql = 'select * from users where username = ? and isonline = ?'
-            let result = await sqlQuery(strSql,[msg.toid.username,'true'])
+            let strSql = 'select * from users where id = ? and isonline = ?'
+            let result = await sqlQuery(strSql,[msg.toid,'true'])
+            console.log(result)
             if(result.length > 0){
                 // 如果此人在线，那么直接发送消息
                 let toid = result[0].socketid
                 
                 socket.to(toid).emit('accept',msg)
                 // // 将聊天内容存放到数据库
-                let strSql1 = 'insert into chat (sendid,toid,content,chattime,isread) values (?,?,?,?,?)'
-                let arr1 =[msg.sendid.id,msg.toid.id,msg.content,msg.chattime,'true']
+                let strSql1 = 'insert into chat (sendid,sendimg,toid,toimg,content,chattime) values (?,?,?,?,?,?)'
+                let arr1 =[msg.sendid,msg.sendimg,msg.toid,msg.toimg,msg.content,msg.chattime]
                 sqlQuery(strSql1,arr1)
             }else{
-                let strSql1 = 'insert into chat (sendid,toid,content,chattime,isread) values (?,?,?,?,?)'
-                let arr1 =[msg.sendid.id,msg.toid.id,msg.content,msg.chattime,'false']
+                let strSql1 = 'insert into chat (sendid,sendimg,toid,toimg,content,chattime) values (?,?,?,?,?,?)'
+                let arr1 =[msg.sendid,msg.sendimg,msg.toid,msg.toimg,msg.content,msg.chattime]
                 sqlQuery(strSql1,arr1)
             }
        }) 
+       socket.on('sendRoomMsg',async function(msg){
+            // 判断组内成员是否在线
+            let strSql = 'select * from users where id in (select userid from user_group where groupid = ?)'
+            let result = await sqlQuery(strSql,[msg.toid])
+            if(result.length > 0){
+                // 给在线的直接发送消息
+                for(let i = 0;i < result.length ; i++ ){
+                    let toid = result[i].socketid
+                    socket.to(toid).emit('acceptroom',msg)
+                }
+
+            }
+            let strSql1 = 'insert into chat (sendid,sendimg,toid,toimg,content,chattime) values (?,?,?,?,?,?)'
+            let arr1 =[msg.sendid,msg.sendimg,msg.toid,msg.toimg,msg.content,msg.chattime]
+            sqlQuery(strSql1,arr1)
+
+       })
        
-    //    如果收到已读消息，将isread改为true
+    //    如果收到已读消息，将用户表的 chattime更新
        socket.on('readMsg',(data)=>{
-           let sqlStr = 'update chat set isread =? where sendid = ? and toid = ?'
-           sqlQuery(sqlStr,['true',data.userid,data.selfid])
+           let sqlStr = 'update users set chattime = ? where id = ?'
+           sqlQuery(sqlStr,[new Date().getTime(),data.selfid])
        })
     });
 }
