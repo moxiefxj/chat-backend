@@ -22,6 +22,7 @@ function getSocket(server){
             let sqlStr = "update user set socketid=?,isonline=? where username =?" 
             let result = await sqlQuery(sqlStr,[socket.id,1,data.username])
             socket.emit('login',{
+                data:data,
                 state:'ok',
                 content:"登陆成功"
             })
@@ -49,7 +50,7 @@ function getSocket(server){
        socket.on('users',async function(data){
             let sqlStr = "select * from user where id in (select friendid from friends where userid = ?)"
             //等待获取mysql查询结果
-            let result =await sqlQuery(sqlStr)
+            let result =await sqlQuery(sqlStr,[data.id])
             socket.emit('users',Array.from(result))
        })
     //    获取群列表
